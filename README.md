@@ -13,7 +13,11 @@ gdigest supports:
  * Unique client nonce per request
  * Nonce counter
 
-## Example
+## Usage
+
+### Authorization Header
+
+Handle the authorization header by your own:
 
 ```go
 package main
@@ -21,14 +25,12 @@ package main
 import (
     "fmt"
     "github.com/mrccnt/gdigest"
-    "io/ioutil"
-    "net/http"
-    "strings"
-    "time"
 )
 
 func main()  {
     
+	// Do it yourself
+	
     // Create a new digest reference for given host, user and pass.
     // In this example we are dealing with a CalDAV server.
     digest := gdigest.NewDigest("<username>", "<password>", "https://cal.example.com")
@@ -60,6 +62,61 @@ Beautified authorization header example:
             opaque="50849db2c592506cf600cc2e68485efa",
             uri="/calendars/acme/default",
             username="acme"
+
+### digest.Request
+
+Let the request object handle it for you:
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/mrccnt/gdigest"
+	"io/ioutil"
+	"net/http"
+	"strings"
+)
+
+func main()  {
+    
+	// Instead of http.NewRequest use gdigest.NewRequest
+    req, err := gdigest.NewRequest("REPORT", "https://cal.example.com/calendars/<username>/default", strings.NewReader("<body>"))
+    if err != nil {
+        panic(err.Error())
+    }
+    
+    // Function SetDigestAuth() is available in addition to SetBasicAuth
+    err = req.SetDigestAuth("<username>", "<password>", "https://cal.example.com", "/calendars/<username>/default", "REPORT", "<body>")
+    if err != nil {
+        panic(err.Error())
+    }
+
+    client := http.Client{}
+
+    // Use "req.Request" instead of "req"
+    res, err := client.Do(req.Request)
+    if err != nil {
+        panic(err.Error())
+    }
+    defer res.Body.Close()
+    
+    content, err := ioutil.ReadAll(res.Body)
+    if err != nil {
+        panic(err.Error())
+    }
+    
+    fmt.Println(string(content))
+}
+```
+
+## Clean Code
+
+That is more or less a reminder to myself... ;)
+
+```bash
+    golangci-lint run --fix --enable=gofmt --out-format checkstyle > checkstyle.xml
+```
 
 ## Links
 

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -59,6 +60,11 @@ type Digest struct {
 	opaque    string
 }
 
+// Request is a custom http.Request
+type Request struct {
+	*http.Request
+}
+
 // NewDigest returns reference of Digest
 func NewDigest(user string, pass string, host string) *Digest {
 	return &Digest{
@@ -66,6 +72,15 @@ func NewDigest(user string, pass string, host string) *Digest {
 		pass: pass,
 		host: host,
 	}
+}
+
+// NewRequest reflects http.NewRequest and returns a *DigestRequest
+func NewRequest(method, url string, body io.Reader) (*Request, error) {
+	request, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	return &Request{request}, nil
 }
 
 // Do returns the generated auth string for given values for your next requests authorization header.
@@ -181,12 +196,8 @@ func (d *Digest) readParam(header string, name string) string {
 		}
 		if strings.ToLower(strings.TrimSpace(kvs[0])) == strings.ToLower(name) {
 			val := strings.TrimSpace(kvs[1])
-			if strings.HasPrefix(val, "\"") {
-				val = val[1:]
-			}
-			if strings.HasSuffix(val, "\"") {
-				val = val[0 : len(val)-1]
-			}
+			val = strings.TrimPrefix(val, "\"")
+			val = strings.TrimSuffix(val, "\"")
 			return val
 		}
 	}
@@ -196,7 +207,10 @@ func (d *Digest) readParam(header string, name string) string {
 // hash returns the md5-hash of given string
 func (d *Digest) hash(text string) string {
 	alg := md5.New()
-	alg.Write([]byte(text))
+	_, err := alg.Write([]byte(text))
+	if err != nil {
+		log.Println(err.Error())
+	}
 	return hex.EncodeToString(alg.Sum(nil))
 }
 
@@ -225,4 +239,15 @@ func (d *Digest) validQop(alg string) bool {
 		}
 	}
 	return false
+}
+
+// SetDigestAuth enables digest authentication
+func (r *Request) SetDigestAuth(user, pass, host, uri, method, body string) error {
+	digest := NewDigest(user, pass, host)
+	str, err := digest.Do(uri, method, body)
+	if err != nil {
+		return err
+	}
+	r.Header.Set("Authorization", str)
+	return nil
 }
